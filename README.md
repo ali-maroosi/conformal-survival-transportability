@@ -2,225 +2,189 @@
 
 # Conformal Survival Prediction Under Distribution Shift
 
-**Censoring-aware calibration · Cross-cohort validation · Reproducible survival analysis**
+**Censoring-aware calibration · Breast cancer cohort transportability · Simulation-based stress testing**
 
-[![Python](https://img.shields.io/badge/Python-Research%20workflow-3776AB?logo=python&logoColor=white)](https://www.python.org/)
-[![Survival Analysis](https://img.shields.io/badge/Focus-Survival%20Analysis-0D9488)](#research-overview)
-[![External Validation](https://img.shields.io/badge/Validation-METABRIC%20%2B%20TCGA--BRCA-5B21B6)](#data-and-study-populations)
-[![License: MIT](https://img.shields.io/badge/Code%20License-MIT-yellow.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.14.4-3776AB?logo=python&logoColor=white)](#software-environment)
+[![Survival analysis](https://img.shields.io/badge/Outcome-Overall%20Survival-0D9488)](#data-sources-and-study-populations)
+[![External validation](https://img.shields.io/badge/External%20cohort-TCGA--BRCA-5B21B6)](#data-sources-and-study-populations)
 
-**Can a survival prediction method remain informative and well calibrated when outcomes are right-censored and the patient population changes?**
-
-This repository documents a research workflow for evaluating **censoring-aware conformal survival prediction**, with an emphasis on **coverage, informativeness, and transportability** from METABRIC to an independent TCGA-BRCA cohort.
-
-[Research overview](#research-overview) · [Study design](#study-design) · [Reproducibility](#reproducing-the-analysis) · [Interpretation](#how-to-interpret-the-results)
+**How robust and informative are conformal survival lower bounds when censoring patterns and patient populations change?**
 
 </div>
 
-> **Repository status — public release in preparation.** The repository initially contains project documentation, the MIT license, and `.gitignore`. Research notebooks, a tested dependency specification, and curated tables/figures are being prepared for upload. Until those files are present, the setup instructions below describe the *intended reproducible workflow*, not a runnable one-command release. No performance figures are asserted here without the accompanying results files.
+> **Release status: research code and executed notebook.** This repository contains the primary research notebook, including its saved execution outputs, and environment-capture tooling. Raw clinical data, separately exported tables and figures, local manuscript files, and downloaded reference implementations are deliberately excluded from version control. The repository is **not yet verified as a clean, one-command reproduction** of every analysis.
 
 ## Research overview
 
-Standard survival models estimate risk or survival functions, but a point estimate alone does not communicate the uncertainty of an individual's event time. Conformal prediction offers a calibration-based framework for uncertainty quantification. Applying it to survival outcomes is challenging because **right censoring hides the actual event times for some patients**; deploying predictions in a new cohort introduces an additional challenge through **distribution shift**.
+Accurate survival estimates alone do not provide a calibrated lower bound on an individual's event time. Right censoring and differences between development and target populations make calibration and evaluation more challenging. This project examines **coverage, predictive informativeness, and cross-cohort transportability** of conformal survival lower predictive bounds (LPBs).
 
-The project investigates three connected questions:
+The workflow combines:
 
-1. **Validity:** How do conformal survival procedures behave when event times are right-censored?
-2. **Informativeness:** How much predictive information is retained in the resulting survival bounds or prediction sets?
-3. **Transportability:** What happens to empirical performance when a procedure developed in METABRIC is evaluated in an independent TCGA-BRCA population?
+- Random Survival Forest (RSF) modeling and conformal calibration;
+- Naive, Focused, and Fused procedures;
+- exploratory density-ratio-weighted variants under covariate shift;
+- internal METABRIC and external TCGA-BRCA evaluation with censoring-aware diagnostics;
+- controlled Monte Carlo simulation and an independent DR-COSARC benchmark.
 
-The **primary endpoint is overall survival (OS)**. The analysis considers both internal held-out evaluation and external validation, supported by simulation and sensitivity analyses.
+**Important:** Performance in a new cohort is an empirical finding, not a blanket finite-sample guarantee under arbitrary censoring or distribution shift. The weighted extensions studied here should not be described as having newly proven theoretical coverage guarantees.
 
-## Data and study populations
+## Data sources and study populations
 
-| Component | Dataset | Role | Cohort size / notes |
-|---|---|---|---|
-| Development | [METABRIC (cBioPortal)](https://www.cbioportal.org/study/summary?id=brca_metabric) | Model fitting and conformal calibration | 2,509 source records; **1,981** with usable OS time/status in the initial analysis |
-| Internal evaluation | METABRIC | Held-out assessment | From the OS-eligible cohort: **1,188 training / 396 calibration / 397 test** observations |
-| External evaluation | [TCGA-BRCA, PanCancer Atlas (cBioPortal)](https://www.cbioportal.org/study/summary?id=brca_tcga_pan_can_atlas_2018) | Cross-cohort transportability assessment | 1,084 source patients; analysis eligibility and shared-variable harmonization must be applied before evaluation |
+| Population | Role | Analytical sample |
+|---|---|---:|
+| [METABRIC](https://www.cbioportal.org/study/summary?id=brca_metabric) | Source cohort for training, calibration, and internal testing | 1,981 OS-eligible patients out of 2,509 initial records |
+| METABRIC training | Survival model fitting | 1,188 |
+| METABRIC calibration | Calibration procedures | 396 |
+| METABRIC internal test | Held-out evaluation | 397 |
+| [TCGA-BRCA PanCancer Atlas](https://www.cbioportal.org/study/summary?id=brca_tcga_pan_can_atlas_2018) | Independent external assessment | 1,084 |
 
-**Outcome definition:** OS follow-up time and event indicator are interpreted jointly. An observed follow-up time for a censored patient is **not** treated as the patient's true event time. Records missing required OS time or status are not automatically reclassified as censored; the exclusion rules and their consequences must be documented.
+The endpoint is **overall survival (OS)**, with event occurrence distinguished from right censoring. Different distributions of follow-up and censoring must be considered when interpreting results. The external, transportable predictor set consists of harmonized **age and histology**; other clinical and extended configurations are evaluated in the source-cohort workflow.
 
-**External validation means external data.** Subdivisions within METABRIC do not constitute an independent cohort. The TCGA-BRCA analysis is used to examine cross-cohort generalization, with predictor harmonization restricted to variables available and comparably defined in both sources.
+Download the clinical input files from the study providers, subject to applicable terms. **Do not redistribute patient-level data through this repository.**
 
-### Data access and governance
+### Expected local input files
 
-- Obtain the relevant clinical files from the linked study pages, subject to each source's terms and access requirements.
-- Keep patient-level or otherwise restricted source files **outside version control**. Only redistribute data where the corresponding terms permit it.
-- Document source study identifiers, download dates, field mappings, exclusion rules, and any local data transformations alongside the released code.
-- The repository's **MIT license covers the original code**, not third-party datasets.
+The notebook expects to be run from its `notebooks/` directory, using these local paths relative to the notebook:
 
-## Study design
-
-```mermaid
-flowchart TD
-    A[METABRIC: OS-eligible cohort] --> B[Train / calibration / test split]
-    B --> C[Train: fit survival models and preprocessing]
-    C --> D[Calibration: construct conformal outputs]
-    D --> E[METABRIC held-out test]
-    D --> F[Independent TCGA-BRCA cohort]
-    G[Shared variable definitions and harmonization] --> F
-    E --> H[Coverage and informativeness evaluation]
-    F --> H
-    H --> I[IPCW, sensitivity analyses, simulations]
+```text
+data/raw/brca_metabric_clinical_data.tsv
+data/raw/brca_tcga_pan_can_atlas_2018_clinical_data.tsv
 ```
 
-### Modeling and calibration components
+These files are intentionally omitted from Git. Preserve the study-specific field names and inspect event coding, missingness, and survival time origins before reproducing the workflow.
 
-| Component | Purpose |
-|---|---|
-| **Random Survival Forests (RSF)** | Survival modeling with clinical and extended predictor configurations |
-| **Naive calibration** | Project baseline for comparison |
-| **Focused and Fused calibration** | Study-specific conformal calibration variants examined against the baseline |
-| **Censoring-aware evaluation** | Empirical evaluation using inverse-probability-of-censoring weighting (IPCW), including censoring-model sensitivity checks |
-| **Transportability analysis** | Evaluate the trained/calibrated procedure on TCGA-BRCA without reusing external outcomes for model selection |
-| **Simulation benchmarks** | Controlled experiments examining censoring and shift, including weighted variants and a DR-COSARC comparison |
+## Methods in brief
 
-**Methodological scope:** The labels *Naive*, *Focused*, and *Fused* refer to procedures in this research workflow; they should not be interpreted as interchangeable with every method bearing a similar name in the literature. Precise definitions, statistical assumptions, and literature attributions belong in the released methodology notebook and manuscript.
+1. **Data quality and cohort construction:** inspect outcome availability, coding, and missingness; create nonoverlapping patient-level METABRIC splits.
+2. **Survival modeling:** train and tune RSF-based predictors using the source training partition; use harmonized predictors for cross-cohort transport.
+3. **Conformal calibration:** evaluate Naive, Focused, and Fused approaches and exploratory weighted variations; keep fitting, calibration, and evaluation roles distinct.
+4. **External evaluation:** apply the fixed trained survival predictor to TCGA-BRCA and examine empirical coverage, LPB informativeness, and censoring-model sensitivity.
+5. **Simulation and independent benchmark:** study no-shift, favorable/adverse-shift, and other stress scenarios; compare against the independent [DR-COSARC implementation](https://github.com/emonzhw/conformal-survival).
 
-### Leakage-prevention principles
+The main outcome summaries are **IPCW-adjusted empirical coverage** where appropriate and the **median LPB (months)**. IPCW depends on censoring assumptions and positivity; reverse Kaplan–Meier follow-up summaries characterize observation duration, not the distribution of true event times.
 
-- Split patients into training, calibration, and test partitions **before** fitting learned preprocessing or predictive components.
-- Fit imputation, encoders, feature transformations, and the survival model on the **training partition only**, unless a method explicitly requires a different and justified scheme.
-- Use calibration records to estimate calibration quantities; preserve the held-out test set for evaluation.
-- Do **not** tune models, choose thresholds, or select features using test or external-validation outcomes.
-- Check feature availability at the prediction time of interest; exclude post-outcome or otherwise unavailable information.
-- Report random seeds, split identifiers, evaluation horizons, censoring assumptions, and eligibility criteria so that numerical results can be reproduced.
-
-## Evaluation framework
-
-The analyses distinguish **coverage** from **informativeness**: a very wide bound may cover more event times without being useful for clinical interpretation.
-
-| Evaluation aspect | What is examined |
-|---|---|
-| Empirical coverage | Agreement between the nominal target and estimated coverage under an explicitly stated estimand |
-| Informativeness | Tightness or usefulness of the produced survival bounds / sets |
-| Censoring | Sensitivity to marginal versus conditional censoring models and IPCW instability |
-| Distribution shift | Changes in coverage and informativeness between held-out METABRIC and independent TCGA-BRCA |
-| Simulation | Repeated controlled experiments to assess behavior under known data-generating settings |
-
-> **Important statistical distinction:** Empirical IPCW coverage is an estimate that depends on censoring assumptions and weight estimation. It is not, by itself, a proof of finite-sample coverage under arbitrary censoring or arbitrary distribution shift. A good internal result does not guarantee external validity.
-
-## Reproducing the analysis
-
-### 1. Clone the repository
-
-```bash
-git clone https://github.com/ali-maroosi/conformal-survival-transportability.git
-cd conformal-survival-transportability
-```
-
-### 2. Prepare Python
-
-Once the tested `requirements.txt` and research notebooks have been committed, create an isolated environment:
-
-```bash
-python -m venv .venv
-```
-
-Activate it on **Windows (PowerShell)**:
-
-```powershell
-.venv\Scripts\Activate.ps1
-```
-
-Or on **macOS/Linux**:
-
-```bash
-source .venv/bin/activate
-```
-
-Then install the released dependencies and launch Jupyter:
-
-```bash
-python -m pip install -r requirements.txt
-jupyter lab
-```
-
-**Current limitation:** `requirements.txt` and the analysis notebooks are **not included in the initial GitHub commit shown above**. These commands cannot complete the analysis until the actual code, tested environment, and required file inputs are uploaded. The final release will document tested Python/package versions rather than guessing them.
-
-### 3. Obtain and prepare the data
-
-Download the METABRIC and TCGA-BRCA clinical files through the source links above. Follow the input paths and filenames specified in the uploaded notebooks. The initial METABRIC exploratory notebook uses the clinical TSV named `brca_metabric_clinical_data.tsv`; its original version expects that file alongside the notebook.
-
-Do not interpret missing event times as right-censoring. Confirm OS time units, event coding, patient identifiers, predictor definitions, and eligibility before running survival analyses.
-
-### 4. Run the analysis in this order
-
-1. **Data audit:** inspect missingness, outcome coding, follow-up, event indicators, and cohort eligibility.
-2. **Internal development:** create reproducible patient-level partitions and train the Clinical/Extended RSF configurations.
-3. **Calibration:** apply the study's Naive, Focused, and Fused procedures using the designated calibration data.
-4. **Held-out evaluation:** estimate coverage and informativeness on the untouched METABRIC test partition.
-5. **External validation:** harmonize shared features and evaluate the fixed procedure on independent TCGA-BRCA patients; do not tune on external outcomes.
-6. **Robustness analyses:** run IPCW/censoring sensitivity checks, simulations, and method comparisons.
-7. **Outputs:** regenerate the manuscript's summary tables and figures from saved analysis outputs.
-
-The actual notebook filenames, execution order, seeds, file manifests, and expected output checksums will be linked here when the code release is complete.
-
-## Planned repository layout
-
-The following is the **target organization**, not a claim that every directory or file already exists:
+## Repository structure
 
 ```text
 conformal-survival-transportability/
 ├── README.md
-├── LICENSE
 ├── .gitignore
-├── requirements.txt             # to be added after environment verification
-├── notebooks/                   # original, ordered analysis notebooks
-├── data/
-│   └── README.md                # data access and input-file documentation
-├── results/
-│   ├── tables/                  # curated, non-sensitive summary tables
-│   └── figures/                 # final paper figures
-└── docs/
-    └── methodology.md           # methods, assumptions and provenance
+├── LICENSE                         # if present in the GitHub repository
+├── notebooks/
+│   └── main.ipynb                  # full research notebook + saved outputs
+├── scripts/
+│   └── capture_environment.sh     # exports current environment metadata
+└── environment/                    # created by running the capture script
+    ├── environment.yml             # full Conda spec, no build strings
+    ├── conda-history.yml           # explicitly requested Conda packages
+    ├── conda-explicit-linux-64.txt  # Conda package URLs for Linux x86_64
+    ├── conda-packages.txt          # Conda package inventory
+    ├── pip-freeze.txt              # pip-installed package snapshot
+    └── software-versions.json      # selected library versions
 ```
 
-The notebook files will be kept under their actual reproducible names, with links added here after publication. Generated datasets and raw patient-level files should not be committed merely to populate the directory tree.
+`data/`, `results/`, `figures/`, `references/`, and `manuscript/` exist only locally when populated; they are ignored by Git. **Plots and printed tables may still be visible as saved outputs inside `notebooks/main.ipynb`** and are not a substitute for regenerating the analysis.
 
-## How to interpret the results
+## Software environment
 
-When reviewing the forthcoming tables and figures:
+The recorded development environment was **WSL/Ubuntu (Linux x86_64), Conda environment `master_thsis`**, with the following reported versions:
 
-- Compare each method with the **same target coverage level**, endpoint, and evaluation protocol.
-- Report **coverage and informativeness together**; neither metric is sufficient on its own.
-- Distinguish **internal hold-out performance** from **independent external validation**.
-- Interpret IPCW estimates in light of the assumed censoring mechanism, positivity, and potential unstable weights.
-- Treat **oracle-weight simulation settings** as controlled benchmarks, not procedures available for real-world patient prediction.
-- Avoid presenting an observed empirical coverage percentage as a universal guarantee of validity under dataset shift.
+| Component | Version | Component | Version |
+|---|---|---|---|
+| Python | 3.14.4 | NumPy | 2.4.4 |
+| pandas | 2.3.3 | SciPy | 1.17.1 |
+| scikit-learn | 1.8.0 | scikit-survival | 0.27.0 |
+| lifelines | 0.30.3 | Matplotlib | 3.10.8 |
+| seaborn | 0.13.2 | joblib | 1.5.3 |
+| ipykernel | 7.2.0 | | |
 
-## Reproducibility and release checklist
+These versions document the original environment; the **full export** is preferred for reconstructing its dependency graph. A `pip freeze` file or a `conda-history.yml` file alone is **not** a complete, tested lockfile for a mixed Conda/pip environment.
 
-- [x] Research question and primary endpoint documented
-- [x] METABRIC cohort audit and OS-eligible sample identified
-- [x] Internal train / calibration / test framework specified
-- [x] Independent TCGA-BRCA validation included in the research workflow
-- [ ] Publish cleaned, executable notebooks
-- [ ] Publish tested dependency versions and execution instructions
-- [ ] Add exact data dictionary, file manifest, and preprocessing rules
-- [ ] Add run-level seed/split information and curated paper figures/tables
-- [ ] Verify end-to-end re-execution from a clean environment
-- [ ] Add manuscript citation / DOI when available
+### Capture the original environment
 
-Checklist items describe **repository publication status**, not whether the underlying research experiments have been explored privately.
+On the original machine, from the repository root:
 
-## Citation
+```bash
+conda activate master_thsis
+bash scripts/capture_environment.sh
+```
 
-If this repository informs your research, please cite the software repository until a formal manuscript citation becomes available:
+Review all files in `environment/` for private URLs, tokens, local paths, and proprietary packages **before committing them**. The script does not copy source clinical datasets. The environment files are designed to be committed after review; unlike `manuscript/`, the `environment/` directory is **not Git-ignored**.
 
-> Maroosi, A. *Conformal Survival Transportability* [software]. GitHub. https://github.com/ali-maroosi/conformal-survival-transportability
+### Reconstruct the environment (Linux, recommended)
 
-A version-specific citation and manuscript reference will be added when a citable release is archived.
+After the verified `environment/environment.yml` has been committed:
 
-## License
+```bash
+conda env create -f environment/environment.yml -n conformal-survival-repro
+conda activate conformal-survival-repro
+python -c "import numpy, pandas, scipy, sklearn, sksurv, lifelines; print('Core imports OK')"
+```
 
-Original repository code is licensed under the [MIT License](LICENSE). Source datasets remain subject to their respective providers' conditions.
+The Conda environment export records package versions and includes pip dependencies where detected. Solvers, wheels, and compiled libraries can change; **exact binary identity and successful reproduction are not guaranteed on every system**. The Linux-specific `conda-explicit-linux-64.txt` is a record of exact Conda builds, but does not by itself restore pip-only packages. The environment must be tested with a fresh installation before describing the repository as fully reproducible.
+
+### Run the notebook
+
+Start Jupyter from the notebook directory (the relative paths above matter):
+
+```bash
+cd notebooks
+jupyter lab main.ipynb
+```
+
+JupyterLab might need installation in the reconstructed environment; `ipykernel` alone does not imply `jupyterlab` is installed. Use the Python interpreter/kernel corresponding to the reconstructed Conda environment. **Running all cells requires the data files and external benchmark dependencies described below.**
+
+### Independent benchmark dependencies
+
+The benchmark sections import an external Python implementation from `../references/sesia_python/src`. Download it locally if you intend to rerun those sections:
+
+```bash
+mkdir -p references
+git clone https://github.com/emonzhw/conformal-survival.git references/sesia_python
+```
+
+The [authors' R reference implementation](https://github.com/msesia/conformal_survival) can be stored in `references/sesia_official` for implementation comparison; it is not bundled or licensed by this project. The exact third-party commit revisions and installation requirements should be recorded for a fully reproducible benchmark.
+
+## Results and interpretation
+
+The saved notebook presents descriptive data audits, modeling diagnostics, internal and external coverage estimates, simulations, and benchmark comparisons. All numerical claims in any accompanying manuscript should be traced to the relevant executed cell and validated against rerun outputs.
+
+- **Coverage is not informativeness:** longer LPBs may be more informative but can reduce empirical coverage.
+- **Internal is not external validation:** source-cohort hold-out estimates do not establish transportability.
+- **IPCW depends on assumptions:** high censoring or extreme weights can make coverage estimates unstable.
+- **Simulation and real-world validation are distinct:** oracle weighting is a simulation comparator, not a deployable clinical workflow.
+- **Methodological audit remains essential:** numerical consistency tests alone do not prove all assumptions or theoretical guarantees.
+
+## Reproducibility checklist
+
+- [x] Analysis notebook with saved outputs committed
+- [x] Raw data and separately exported results excluded from Git
+- [x] Environment-capture script available
+- [ ] Full environment export generated and reviewed for confidential paths
+- [ ] Environment metadata committed to `environment/`
+- [ ] External implementation revisions recorded
+- [ ] End-to-end rerun verified in a clean environment
+- [ ] Final manuscript and source-data provenance documented
+
+## References and citation
+
+- [METABRIC cohort](https://www.cbioportal.org/study/summary?id=brca_metabric)
+- [TCGA-BRCA PanCancer Atlas](https://www.cbioportal.org/study/summary?id=brca_tcga_pan_can_atlas_2018)
+- [Sesia & Svetnik, *Doubly Robust Conformalized Survival Analysis with Right-Censored Data* (ICML 2025)](https://proceedings.mlr.press/v267/sesia25a.html)
+- [DR-COSARC Python implementation](https://github.com/emonzhw/conformal-survival)
+
+Until a manuscript or archived software release has a persistent identifier, cite the repository with its exact Git commit or release tag:
+
+> Maroosi, A. *Conformal Survival Transportability* [research software]. GitHub: https://github.com/ali-maroosi/conformal-survival-transportability
+
+## License and data governance
+
+See the repository's `LICENSE` file for the license, **if that file is present**. No license granted for original code automatically grants permission to redistribute third-party clinical datasets or external reference implementations.
 
 ---
 
 <div align="center">
 
-**Reliable survival prediction requires more than accurate risk scores: it requires careful uncertainty quantification, honest censoring assumptions, and evaluation beyond the development cohort.**
+*Reliable survival prediction requires transparent calibration, honest censoring assumptions, and validation beyond the development cohort.*
 
 </div>

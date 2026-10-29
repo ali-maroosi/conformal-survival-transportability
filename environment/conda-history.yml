@@ -1,0 +1,13 @@
+name: master_thsis
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python
+  - numpy
+  - ipykernel
+  - scikit-learn
+  - matplotlib
+  - seaborn
+  - scikit-survival
+  - openpyxl

@@ -1,0 +1,21 @@
+{
+    "python_version": "3.14.4",
+    "platform": "Linux",
+    "architecture": "x86_64",
+    "packages": {
+        "numpy": "2.4.4",
+        "pandas": "2.3.3",
+        "scipy": "1.17.1",
+        "scikit-learn": "1.8.0",
+        "scikit-survival": "0.27.0",
+        "lifelines": "0.30.3",
+        "matplotlib": "3.10.8",
+        "seaborn": "0.13.2",
+        "statsmodels": null,
+        "joblib": "1.5.3",
+        "optuna": null,
+        "tqdm": null,
+        "ipykernel": "7.2.0",
+        "jupyterlab": null
+    }
+}
