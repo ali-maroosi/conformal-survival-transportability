@@ -1,0 +1,47 @@
+# Patient datasets
+data/
+
+# Generated standalone figures and results
+figures/
+results/
+
+# Downloaded reference repositories
+references/
+
+# Manuscript and documents
+manuscript/
+
+# Temporary clean notebooks
+code/
+
+# Data and exported files
+*.csv
+*.tsv
+*.xlsx
+*.xls
+*.pdf
+*.docx
+*.png
+*.jpg
+*.jpeg
+*.zip
+
+# Jupyter temporary files
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Environments and secrets
+.venv/
+venv/
+.env
+.env.*
+*.pem
+*.key
+
+# Editor and temporary files
+.vscode/
+.idea/
+.DS_Store
+*.bak
